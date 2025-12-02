@@ -1,197 +1,134 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buffer Overflow Vulnerability Demo</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #d32f2f;
-        }
-        .warning {
-            background-color: #ffebee;
-            border-left: 4px solid #d32f2f;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        input {
-            padding: 10px;
-            width: 100%;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        button {
-            background-color: #d32f2f;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 10px 5px 10px 0;
-        }
-        button:hover {
-            background-color: #b71c1c;
-        }
-        #output {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #f5f5f5;
-            border-radius: 4px;
-            white-space: pre-wrap;
-            font-family: monospace;
-        }
-        .error {
-            color: #d32f2f;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>⚠️ Buffer Overflow Vulnerability Demonstration</h1>
-        
-        <div class="warning">
-            <strong>WARNING:</strong> This is a demonstration of a buffer overflow vulnerability. 
-            In a real application, this could lead to memory corruption, crashes, or security exploits.
-        </div>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-        <h2>Vulnerable Buffer Implementation</h2>
-        <p>This demonstrates unsafe buffer operations that can lead to buffer overflow:</p>
-        
-        <label for="inputData">Enter data to copy to buffer (try entering more than 10 characters):</label>
-        <input type="text" id="inputData" placeholder="Enter text here..." value="Hello World!">
-        
-        <label for="bufferSize">Buffer Size (default: 10 bytes):</label>
-        <input type="number" id="bufferSize" value="10" min="1" max="100">
-        
-        <button onclick="demonstrateOverflow()">Demonstrate Buffer Overflow</button>
-        <button onclick="demonstrateSafeCopy()">Safe Copy (with bounds check)</button>
-        <button onclick="clearOutput()">Clear Output</button>
-        
-        <div id="output"></div>
-    </div>
+void vulnerable_strcpy(char *input) {
+    char buffer[64];
+    strcpy(buffer, input);
+    printf("Buffer: %s\n", buffer);
+}
 
-    <script>
-        // VULNERABLE: Unsafe buffer copy without bounds checking
-        function unsafeBufferCopy(source, buffer, bufferSize) {
-            const output = document.getElementById('output');
-            output.innerHTML = '';
-            output.innerHTML += '=== UNSAFE BUFFER COPY ===\n';
-            output.innerHTML += `Buffer size: ${bufferSize} bytes\n`;
-            output.innerHTML += `Source length: ${source.length} bytes\n\n`;
-            
-            // VULNERABILITY: No bounds checking - can overflow buffer
-            for (let i = 0; i < source.length; i++) {
-                if (i < bufferSize) {
-                    buffer[i] = source.charCodeAt(i);
-                    output.innerHTML += `buffer[${i}] = ${buffer[i]} (${String.fromCharCode(buffer[i])})\n`;
-                } else {
-                    // BUFFER OVERFLOW: Writing beyond buffer boundaries
-                    output.innerHTML += `<span class="error">OVERFLOW: Writing to buffer[${i}] = ${source.charCodeAt(i)} (${source[i]}) - OUT OF BOUNDS!</span>\n`;
-                    // In a real system, this could corrupt adjacent memory
-                    buffer[i] = source.charCodeAt(i); // Dangerous!
-                }
-            }
-            
-            output.innerHTML += '\n<span class="error">⚠️ BUFFER OVERFLOW DETECTED!</span>\n';
-            output.innerHTML += `Attempted to write ${source.length} bytes to a ${bufferSize}-byte buffer.\n`;
-            output.innerHTML += `Overflow: ${source.length - bufferSize} bytes\n`;
-            
-            return buffer;
-        }
+void vulnerable_printf(char *user_input) {
+    printf(user_input);
+}
 
-        // SAFE: Buffer copy with bounds checking
-        function safeBufferCopy(source, buffer, bufferSize) {
-            const output = document.getElementById('output');
-            output.innerHTML = '';
-            output.innerHTML += '=== SAFE BUFFER COPY (with bounds check) ===\n';
-            output.innerHTML += `Buffer size: ${bufferSize} bytes\n`;
-            output.innerHTML += `Source length: ${source.length} bytes\n\n`;
-            
-            const copyLength = Math.min(source.length, bufferSize);
-            
-            for (let i = 0; i < copyLength; i++) {
-                buffer[i] = source.charCodeAt(i);
-                output.innerHTML += `buffer[${i}] = ${buffer[i]} (${String.fromCharCode(buffer[i])})\n`;
-            }
-            
-            if (source.length > bufferSize) {
-                output.innerHTML += `\n✅ Bounds check prevented overflow!\n`;
-                output.innerHTML += `Only copied ${copyLength} bytes (truncated ${source.length - bufferSize} bytes)\n`;
-            } else {
-                output.innerHTML += `\n✅ All data copied safely.\n`;
-            }
-            
-            return buffer;
-        }
+void vulnerable_system(char *filename) {
+    char command[256];
+    snprintf(command, sizeof(command), "cat %s", filename);
+    system(command);
+}
 
-        function demonstrateOverflow() {
-            const input = document.getElementById('inputData').value;
-            const bufferSize = parseInt(document.getElementById('bufferSize').value) || 10;
-            
-            // Create a buffer (simulating a fixed-size buffer)
-            const buffer = new Uint8Array(bufferSize);
-            
-            // Demonstrate the vulnerability
-            unsafeBufferCopy(input, buffer, bufferSize);
-        }
+int vulnerable_malloc(size_t count, size_t size) {
+    size_t total = count * size;
+    return malloc(total);
+}
 
-        function demonstrateSafeCopy() {
-            const input = document.getElementById('inputData').value;
-            const bufferSize = parseInt(document.getElementById('bufferSize').value) || 10;
-            
-            // Create a buffer (simulating a fixed-size buffer)
-            const buffer = new Uint8Array(bufferSize);
-            
-            // Demonstrate safe copying
-            safeBufferCopy(input, buffer, bufferSize);
-        }
+void vulnerable_use_after_free() {
+    char *ptr = malloc(100);
+    free(ptr);
+    strcpy(ptr, "exploit");
+}
 
-        function clearOutput() {
-            document.getElementById('output').innerHTML = '';
-        }
+void vulnerable_double_free(char *data) {
+    free(data);
+    free(data);
+}
 
-        // Additional vulnerability: Unsafe string concatenation
-        function demonstrateStringOverflow() {
-            const output = document.getElementById('output');
-            output.innerHTML = '';
-            output.innerHTML += '=== STRING BUFFER OVERFLOW ===\n';
-            
-            // Simulating a fixed-size string buffer
-            const bufferSize = 10;
-            let buffer = '';
-            
-            const input = document.getElementById('inputData').value;
-            
-            output.innerHTML += `Buffer size limit: ${bufferSize} characters\n`;
-            output.innerHTML += `Input length: ${input.length} characters\n\n`;
-            
-            // VULNERABLE: No length check before concatenation
-            buffer = input; // Direct assignment without validation
-            
-            if (buffer.length > bufferSize) {
-                output.innerHTML += `<span class="error">OVERFLOW: Buffer contains ${buffer.length} characters (exceeds ${bufferSize} limit)</span>\n`;
-                output.innerHTML += `Buffer content: "${buffer}"\n`;
-                output.innerHTML += `Overflow by: ${buffer.length - bufferSize} characters\n`;
-            } else {
-                output.innerHTML += `Buffer content: "${buffer}"\n`;
-                output.innerHTML += `✅ Within buffer limits\n`;
-            }
+void vulnerable_gets() {
+    char buffer[128];
+    gets(buffer);
+    printf("Input: %s\n", buffer);
+}
+
+void vulnerable_sprintf(char *input) {
+    char *buffer = malloc(64);
+    sprintf(buffer, "%s", input);
+    free(buffer);
+}
+
+void vulnerable_file_access(char *filename) {
+    char path[256];
+    snprintf(path, sizeof(path), "/var/www/uploads/%s", filename);
+    FILE *fp = fopen(path, "r");
+    if (fp) {
+        fclose(fp);
+    }
+}
+
+void vulnerable_race_condition(char *filename) {
+    if (access(filename, R_OK) == 0) {
+        FILE *fp = fopen(filename, "r");
+        if (fp) {
+            fclose(fp);
         }
-    </script>
-</body>
-</html>
+    }
+}
+
+void vulnerable_null_deref(char *str) {
+    int len = strlen(str);
+    printf("Length: %d\n", len);
+}
+
+void vulnerable_uninitialized() {
+    int value;
+    printf("Value: %d\n", value);
+}
+
+int vulnerable_random() {
+    return rand();
+}
+
+void vulnerable_hardcoded_credentials() {
+    char *username = "admin";
+    char *password = "password123";
+    printf("Login: %s/%s\n", username, password);
+}
+
+void vulnerable_encryption(char *data) {
+    for (int i = 0; i < strlen(data); i++) {
+        data[i] = data[i] ^ 0x42;
+    }
+}
+
+void vulnerable_sql_pattern(char *username) {
+    char query[512];
+    snprintf(query, sizeof(query), "SELECT * FROM users WHERE name = '%s'", username);
+}
+
+void vulnerable_xss_pattern(char *user_input) {
+    printf("<div>%s</div>\n", user_input);
+}
+
+void vulnerable_input_validation(char *input) {
+    int num = atoi(input);
+    printf("Number: %d\n", num);
+}
+
+void vulnerable_memory_leak() {
+    char *leak = malloc(1024);
+}
+
+void vulnerable_oob_read(char *array, int index) {
+    char buffer[100];
+    buffer[index] = array[index];
+}
+
+void vulnerable_oob_write(char *array, int index, char value) {
+    array[index] = value;
+}
+
+void vulnerable_resource_handling() {
+    FILE *fp = fopen("test.txt", "r");
+    if (fp) {
+    }
+}
+
+int main(int argc, char *argv[]) {
+    if (argc > 1) {
+        vulnerable_strcpy(argv[1]);
+        vulnerable_printf(argv[1]);
+        vulnerable_system(argv[1]);
+    }
+    return 0;
+}
