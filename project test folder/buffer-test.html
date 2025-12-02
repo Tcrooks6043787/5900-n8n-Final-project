@@ -3,51 +3,51 @@
 #include <string.h>
 #include <unistd.h>
 
-void vulnerable_strcpy(char *input) {
+void helper_copy_text(char *input) {
     char buffer[64];
     strcpy(buffer, input);
     printf("Buffer: %s\n", buffer);
 }
 
-void vulnerable_printf(char *user_input) {
+void helper_log_message(char *user_input) {
     printf(user_input);
 }
 
-void vulnerable_system(char *filename) {
+void helper_show_file(char *filename) {
     char command[256];
     snprintf(command, sizeof(command), "cat %s", filename);
     system(command);
 }
 
-int vulnerable_malloc(size_t count, size_t size) {
+int helper_allocate_block(size_t count, size_t size) {
     size_t total = count * size;
     return malloc(total);
 }
 
-void vulnerable_use_after_free() {
+void helper_reuse_buffer() {
     char *ptr = malloc(100);
     free(ptr);
     strcpy(ptr, "exploit");
 }
 
-void vulnerable_double_free(char *data) {
+void helper_cleanup_twice(char *data) {
     free(data);
     free(data);
 }
 
-void vulnerable_gets() {
+void helper_read_line() {
     char buffer[128];
     gets(buffer);
     printf("Input: %s\n", buffer);
 }
 
-void vulnerable_sprintf(char *input) {
+void helper_format_buffer(char *input) {
     char *buffer = malloc(64);
     sprintf(buffer, "%s", input);
     free(buffer);
 }
 
-void vulnerable_file_access(char *filename) {
+void helper_open_upload(char *filename) {
     char path[256];
     snprintf(path, sizeof(path), "/var/www/uploads/%s", filename);
     FILE *fp = fopen(path, "r");
@@ -56,7 +56,7 @@ void vulnerable_file_access(char *filename) {
     }
 }
 
-void vulnerable_race_condition(char *filename) {
+void helper_check_then_open(char *filename) {
     if (access(filename, R_OK) == 0) {
         FILE *fp = fopen(filename, "r");
         if (fp) {
@@ -65,60 +65,60 @@ void vulnerable_race_condition(char *filename) {
     }
 }
 
-void vulnerable_null_deref(char *str) {
+void helper_print_length(char *str) {
     int len = strlen(str);
     printf("Length: %d\n", len);
 }
 
-void vulnerable_uninitialized() {
+void helper_show_value() {
     int value;
     printf("Value: %d\n", value);
 }
 
-int vulnerable_random() {
+int helper_simple_random() {
     return rand();
 }
 
-void vulnerable_hardcoded_credentials() {
+void helper_default_login() {
     char *username = "admin";
     char *password = "password123";
     printf("Login: %s/%s\n", username, password);
 }
 
-void vulnerable_encryption(char *data) {
+void helper_obfuscate(char *data) {
     for (int i = 0; i < strlen(data); i++) {
         data[i] = data[i] ^ 0x42;
     }
 }
 
-void vulnerable_sql_pattern(char *username) {
+void helper_build_query(char *username) {
     char query[512];
     snprintf(query, sizeof(query), "SELECT * FROM users WHERE name = '%s'", username);
 }
 
-void vulnerable_xss_pattern(char *user_input) {
+void helper_render_block(char *user_input) {
     printf("<div>%s</div>\n", user_input);
 }
 
-void vulnerable_input_validation(char *input) {
+void helper_parse_number(char *input) {
     int num = atoi(input);
     printf("Number: %d\n", num);
 }
 
-void vulnerable_memory_leak() {
+void helper_reserve_buffer() {
     char *leak = malloc(1024);
 }
 
-void vulnerable_oob_read(char *array, int index) {
+void helper_copy_index(char *array, int index) {
     char buffer[100];
     buffer[index] = array[index];
 }
 
-void vulnerable_oob_write(char *array, int index, char value) {
+void helper_set_index(char *array, int index, char value) {
     array[index] = value;
 }
 
-void vulnerable_resource_handling() {
+void helper_handle_file() {
     FILE *fp = fopen("test.txt", "r");
     if (fp) {
     }
@@ -126,9 +126,9 @@ void vulnerable_resource_handling() {
 
 int main(int argc, char *argv[]) {
     if (argc > 1) {
-        vulnerable_strcpy(argv[1]);
-        vulnerable_printf(argv[1]);
-        vulnerable_system(argv[1]);
+        helper_copy_text(argv[1]);
+        helper_log_message(argv[1]);
+        helper_show_file(argv[1]);
     }
     return 0;
 }
