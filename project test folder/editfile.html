@@ -1,195 +1,77 @@
-```c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <time.h>
-#include <limits.h>
-
-static int is_filename_safe(const char *filename) {
-    if (filename == NULL || *filename == '\0') {
-        return 0;
-    }
-    if (strstr(filename, "..") != NULL || strchr(filename, '/') != NULL || strchr(filename, '\\') != NULL) {
-        return 0;
-    }
-    return 1;
-}
-
-static char* sql_escape(const char *input) {
-    if (input == NULL) return NULL;
-    size_t input_len = strlen(input);
-    size_t escaped_len = input_len;
-    for (size_t i = 0; i < input_len; i++) {
-        if (input[i] == '\'') {
-            escaped_len++;
-        }
-    }
-    char *escaped = malloc(escaped_len + 1);
-    if (escaped == NULL) {
-        perror("Memory allocation failed for SQL escape");
-        return NULL;
-    }
-    size_t j = 0;
-    for (size_t i = 0; i < input_len; i++) {
-        if (input[i] == '\'') {
-            escaped[j++] = '\'';
-            escaped[j++] = '\'';
-        } else {
-            escaped[j++] = input[i];
-        }
-    }
-    escaped[j] = '\0';
-    return escaped;
-}
-
-static char* html_encode(const char* input) {
-    if (input == NULL) return NULL;
-    size_t input_len = strlen(input);
-    size_t output_len = 0;
-    for (size_t i = 0; i < input_len; i++) {
-        switch (input[i]) {
-            case '&': output_len += 5; break;
-            case '<': output_len += 4; break;
-            case '>': output_len += 4; break;
-            case '"': output_len += 6; break;
-            case '\'': output_len += 6; break;
-            default: output_len++; break;
-        }
-    }
-    char* encoded_output = malloc(output_len + 1);
-    if (encoded_output == NULL) {
-        perror("Memory allocation failed for HTML encode");
-        return NULL;
-    }
-    size_t j = 0;
-    for (size_t i = 0; i < input_len; i++) {
-        switch (input[i]) {
-            case '&': strcpy(&encoded_output[j], "&amp;"); j += 5; break;
-            case '<': strcpy(&encoded_output[j], "&lt;"); j += 4; break;
-            case '>': strcpy(&encoded_output[j], "&gt;"); j += 4; break;
-            case '"': strcpy(&encoded_output[j], "&quot;"); j += 6; break;
-            case '\'': strcpy(&encoded_output[j], "&#x27;"); j += 6; break;
-            default: encoded_output[j++] = input[i]; break;
-        }
-    }
-    encoded_output[j] = '\0';
-    return encoded_output;
-}
 
 void helper_copy_text(char *input) {
     char buffer[64];
-    strncpy(buffer, input, sizeof(buffer) - 1);
-    buffer[sizeof(buffer) - 1] = '\0';
+    strcpy(buffer, input);
     printf("Buffer: %s\n", buffer);
 }
 
 void helper_log_message(char *user_input) {
-    printf("%s\n", user_input);
+    printf(user_input);
 }
 
 void helper_show_file(char *filename) {
-    FILE *fp = fopen(filename, "r");
-    if (fp) {
-        int ch;
-        printf("File content:\n");
-        while ((ch = fgetc(fp)) != EOF) {
-            putchar(ch);
-        }
-        fclose(fp);
-    } else {
-        perror("Error opening file");
-    }
+    char command[256];
+    snprintf(command, sizeof(command), "cat %s", filename);
+    system(command);
 }
 
-void *helper_allocate_block(size_t count, size_t size) {
-    if (count == 0 || size == 0) {
-        return NULL;
-    }
-    if (SIZE_MAX / count < size) {
-        fprintf(stderr, "Error: Integer overflow detected for allocation size.\n");
-        return NULL;
-    }
+int helper_allocate_block(size_t count, size_t size) {
     size_t total = count * size;
-    void *ptr = malloc(total);
-    if (ptr == NULL) {
-        perror("Error allocating memory");
-    }
-    return ptr;
+    return malloc(total);
 }
 
 void helper_reuse_buffer() {
     char *ptr = malloc(100);
-    if (ptr == NULL) {
-        perror("Memory allocation failed");
-        return;
-    }
     free(ptr);
+    strcpy(ptr, "exploit");
 }
 
 void helper_cleanup_twice(char *data) {
-    if (data != NULL) {
-        free(data);
-    }
+    free(data);
+    free(data);
 }
 
 void helper_read_line() {
     char buffer[128];
-    printf("Enter input: ");
-    if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
-        buffer[strcspn(buffer, "\n")] = '\0';
-        printf("Input: %s\n", buffer);
-    } else {
-        fprintf(stderr, "Error reading input.\n");
-    }
+    gets(buffer);
+    printf("Input: %s\n", buffer);
 }
 
 void helper_format_buffer(char *input) {
     char *buffer = malloc(64);
-    if (buffer == NULL) {
-        perror("Memory allocation failed");
-        return;
-    }
-    snprintf(buffer, 64, "%s", input);
-    printf("Formatted Buffer: %s\n", buffer);
+    sprintf(buffer, "%s", input);
     free(buffer);
 }
 
 void helper_open_upload(char *filename) {
-    if (!is_filename_safe(filename)) {
-        fprintf(stderr, "Error: Invalid characters in filename. Path traversal attempt blocked.\n");
-        return;
-    }
     char path[256];
     snprintf(path, sizeof(path), "/var/www/uploads/%s", filename);
     FILE *fp = fopen(path, "r");
     if (fp) {
         fclose(fp);
-    } else {
-        perror("Error opening upload file");
     }
 }
 
 void helper_check_then_open(char *filename) {
-    FILE *fp = fopen(filename, "r");
-    if (fp) {
-        fclose(fp);
-    } else {
-        perror("Error opening file (permission or file not found)");
+    if (access(filename, R_OK) == 0) {
+        FILE *fp = fopen(filename, "r");
+        if (fp) {
+            fclose(fp);
+        }
     }
 }
 
 void helper_print_length(char *str) {
-    if (str == NULL) {
-        printf("Length: (null string)\n");
-        return;
-    }
     int len = strlen(str);
     printf("Length: %d\n", len);
 }
 
 void helper_show_value() {
-    int value = 0;
+    int value;
     printf("Value: %d\n", value);
 }
 
@@ -198,102 +80,51 @@ int helper_simple_random() {
 }
 
 void helper_default_login() {
-    char *username = "guest_user";
-    char *password = "weak_password";
+    char *username = "admin";
+    char *password = "password123";
     printf("Login: %s/%s\n", username, password);
 }
 
 void helper_obfuscate(char *data) {
-    if (data == NULL) {
-        fprintf(stderr, "Error: Cannot obfuscate NULL data.\n");
-        return;
-    }
-    size_t len = strlen(data);
-    for (size_t i = 0; i < len; i++) {
+    for (int i = 0; i < strlen(data); i++) {
         data[i] = data[i] ^ 0x42;
     }
 }
 
 void helper_build_query(char *username) {
-    char *escaped_username = sql_escape(username);
-    if (escaped_username == NULL) {
-        fprintf(stderr, "Error: Failed to escape username for SQL query.\n");
-        return;
-    }
     char query[512];
-    snprintf(query, sizeof(query), "SELECT * FROM users WHERE name = '%s'", escaped_username);
-    free(escaped_username);
+    snprintf(query, sizeof(query), "SELECT * FROM users WHERE name = '%s'", username);
 }
 
 void helper_render_block(char *user_input) {
-    char* encoded_input = html_encode(user_input);
-    if (encoded_input == NULL) {
-        fprintf(stderr, "Error: Failed to HTML encode user input.\n");
-        return;
-    }
-    printf("<div>%s</div>\n", encoded_input);
-    free(encoded_input);
+    printf("<div>%s</div>\n", user_input);
 }
 
 void helper_parse_number(char *input) {
-    char *endptr;
-    long num = strtol(input, &endptr, 10);
-    if (endptr == input) {
-        printf("Number: Invalid input (no digits found).\n");
-    } else if (*endptr != '\0' && *endptr != '\n') {
-        printf("Number: Partial conversion, non-numeric characters found: %s\n", input);
-    } else if (num > INT_MAX || num < INT_MIN) {
-        printf("Number: Value out of int range: %ld\n", num);
-    } else {
-        printf("Number: %d\n", (int)num);
-    }
+    int num = atoi(input);
+    printf("Number: %d\n", num);
 }
 
 void helper_reserve_buffer() {
     char *leak = malloc(1024);
-    if (leak == NULL) {
-        perror("Memory allocation failed");
-        return;
-    }
-    free(leak);
 }
 
 void helper_copy_index(char *array, int index) {
     char buffer[100];
-    if (array == NULL) {
-        fprintf(stderr, "Error: 'array' is NULL.\n");
-        return;
-    }
-    size_t array_len = strlen(array);
-    if (index < 0 || (size_t)index >= sizeof(buffer) || (size_t)index >= array_len) {
-        fprintf(stderr, "Error: Index %d out of bounds.\n", index);
-        return;
-    }
     buffer[index] = array[index];
 }
 
 void helper_set_index(char *array, int index, char value) {
-    if (array == NULL) {
-        fprintf(stderr, "Error: 'array' is NULL.\n");
-        return;
-    }
-    size_t array_len = strlen(array);
-    if (index < 0 || (size_t)index >= array_len) {
-        fprintf(stderr, "Error: Index %d out of bounds for array (0-%zu).\n", index, array_len - 1);
-        return;
-    }
     array[index] = value;
 }
 
 void helper_handle_file() {
     FILE *fp = fopen("test.txt", "r");
     if (fp) {
-        fclose(fp);
     }
 }
 
 int main(int argc, char *argv[]) {
-    srand(time(NULL));
     if (argc > 1) {
         helper_copy_text(argv[1]);
         helper_log_message(argv[1]);
@@ -301,4 +132,3 @@ int main(int argc, char *argv[]) {
     }
     return 0;
 }
-```
