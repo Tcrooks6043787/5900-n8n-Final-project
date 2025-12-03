@@ -1,149 +1,77 @@
-```c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <time.h>   // For srand, time
-#include <limits.h> // For SIZE_MAX, INT_MAX, INT_MIN, LONG_MAX, LONG_MIN
-#include <errno.h>  // For errno, strerror
-#include <ctype.h>  // For isspace
 
 void helper_copy_text(char *input) {
     char buffer[64];
-    strncpy(buffer, input, sizeof(buffer) - 1);
-    buffer[sizeof(buffer) - 1] = '\0';
+    strcpy(buffer, input);
     printf("Buffer: %s\n", buffer);
 }
 
 void helper_log_message(char *user_input) {
-    printf("%s", user_input);
+    printf(user_input);
 }
 
 void helper_show_file(char *filename) {
-    FILE *fp = fopen(filename, "r");
-    if (fp) {
-        char line[256];
-        while (fgets(line, sizeof(line), fp) != NULL) {
-            printf("%s", line);
-        }
-        fclose(fp);
-    } else {
-        fprintf(stderr, "Error opening file: %s\n", filename);
-    }
+    char command[256];
+    snprintf(command, sizeof(command), "cat %s", filename);
+    system(command);
 }
 
-void *helper_allocate_block(size_t count, size_t size) { // Changed return type to void*
-    if (count == 0 || size == 0) {
-        return NULL;
-    }
-    // Check for integer overflow before multiplication
-    if (SIZE_MAX / count < size) {
-        fprintf(stderr, "Integer overflow detected in allocation size.\n");
-        errno = EOVERFLOW; // Set errno to indicate overflow
-        return NULL;
-    }
+int helper_allocate_block(size_t count, size_t size) {
     size_t total = count * size;
     return malloc(total);
 }
 
 void helper_reuse_buffer() {
     char *ptr = malloc(100);
-    if (ptr == NULL) {
-        fprintf(stderr, "Memory allocation failed in helper_reuse_buffer.\n");
-        return;
-    }
-    // Use ptr here if needed
     free(ptr);
-    // DO NOT use ptr after free
+    strcpy(ptr, "exploit");
 }
 
 void helper_cleanup_twice(char *data) {
     free(data);
-    // Only free once
+    free(data);
 }
 
 void helper_read_line() {
     char buffer[128];
-    if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
-        // Remove trailing newline character if present
-        buffer[strcspn(buffer, "\n")] = 0;
-        printf("Input: %s\n", buffer);
-    } else {
-        fprintf(stderr, "Error reading input.\n");
-    }
+    gets(buffer);
+    printf("Input: %s\n", buffer);
 }
 
 void helper_format_buffer(char *input) {
     char *buffer = malloc(64);
-    if (buffer == NULL) {
-        fprintf(stderr, "Memory allocation failed in helper_format_buffer.\n");
-        return;
-    }
-    snprintf(buffer, 64, "%s", input);
-    printf("Formatted buffer: %s\n", buffer);
+    sprintf(buffer, "%s", input);
     free(buffer);
-}
-
-// Helper function to sanitize filename (private to the fix)
-static void sanitize_filename(char *filename_buffer) {
-    if (filename_buffer == NULL) return;
-    char *src = filename_buffer;
-    char *dst = filename_buffer;
-    while (*src) {
-        // Skip directory separators and path traversal indicators
-        if (*src == '/' || *src == '\\' || (strncmp(src, "..", 2) == 0 && (src[2] == '/' || src[2] == '\\' || src[2] == '\0'))) {
-            if (strncmp(src, "..", 2) == 0) {
-                src += (src[2] == '\0' ? 2 : 3);
-            } else {
-                src++;
-            }
-            continue;
-        }
-        *dst++ = *src++;
-    }
-    *dst = '\0';
 }
 
 void helper_open_upload(char *filename) {
     char path[256];
-    char sanitized_filename[FILENAME_MAX];
-    strncpy(sanitized_filename, filename, sizeof(sanitized_filename) - 1);
-    sanitized_filename[sizeof(sanitized_filename) - 1] = '\0';
-
-    sanitize_filename(sanitized_filename);
-
-    snprintf(path, sizeof(path), "/var/www/uploads/%s", sanitized_filename);
+    snprintf(path, sizeof(path), "/var/www/uploads/%s", filename);
     FILE *fp = fopen(path, "r");
     if (fp) {
-        printf("File opened successfully: %s\n", path);
         fclose(fp);
-    } else {
-        fprintf(stderr, "Error opening file: %s (Error: %s)\n", path, strerror(errno));
     }
 }
 
 void helper_check_then_open(char *filename) {
-    // Avoid TOCTOU by attempting to open directly and checking errors
-    FILE *fp = fopen(filename, "r");
-    if (fp) {
-        printf("File opened successfully (after check): %s\n", filename);
-        fclose(fp);
-    } else {
-        fprintf(stderr, "Could not open file: %s (Error: %s)\n", filename, strerror(errno));
+    if (access(filename, R_OK) == 0) {
+        FILE *fp = fopen(filename, "r");
+        if (fp) {
+            fclose(fp);
+        }
     }
 }
 
 void helper_print_length(char *str) {
-    if (str == NULL) {
-        printf("Length: (null) (0)\n");
-        return;
-    }
     int len = strlen(str);
     printf("Length: %d\n", len);
 }
 
 void helper_show_value() {
-    int value = 0; // Initialize to a default value
+    int value;
     printf("Value: %d\n", value);
 }
 
@@ -158,196 +86,49 @@ void helper_default_login() {
 }
 
 void helper_obfuscate(char *data) {
-    if (data == NULL) {
-        return;
-    }
-    size_t len = strlen(data); // Compute length once
-    for (size_t i = 0; i < len; i++) {
+    for (int i = 0; i < strlen(data); i++) {
         data[i] = data[i] ^ 0x42;
     }
 }
 
-// Static helper for SQL string escaping
-static void escape_sql_string(char *dest, size_t dest_size, const char *src) {
-    if (dest == NULL || src == NULL || dest_size == 0) {
-        if (dest != NULL) dest[0] = '\0';
-        return;
-    }
-    size_t dest_idx = 0;
-    for (size_t i = 0; src[i] != '\0' && dest_idx < dest_size - 1; ++i) {
-        if (src[i] == '\'') {
-            if (dest_idx + 1 < dest_size - 1) {
-                dest[dest_idx++] = '\'';
-            } else {
-                break;
-            }
-        }
-        dest[dest_idx++] = src[i];
-    }
-    dest[dest_idx] = '\0';
-}
-
 void helper_build_query(char *username) {
     char query[512];
-    char escaped_username[2 * 256 + 1]; // Max size if all chars are single quotes, +1 for null
-
-    if (username == NULL) {
-        snprintf(query, sizeof(query), "SELECT * FROM users WHERE name = ''");
-    } else {
-        escape_sql_string(escaped_username, sizeof(escaped_username), username);
-        snprintf(query, sizeof(query), "SELECT * FROM users WHERE name = '%s'", escaped_username);
-    }
-    printf("Query: %s\n", query);
-}
-
-// Static helper for HTML escaping
-static void escape_html_string(char *dest, size_t dest_size, const char *src) {
-    if (dest == NULL || src == NULL || dest_size == 0) {
-        if (dest != NULL) dest[0] = '\0';
-        return;
-    }
-    size_t dest_idx = 0;
-    for (size_t i = 0; src[i] != '\0' && dest_idx < dest_size - 1; ++i) {
-        switch (src[i]) {
-            case '&': if (dest_idx + 5 < dest_size) { memcpy(dest + dest_idx, "&amp;", 5); dest_idx += 5; } break;
-            case '<': if (dest_idx + 4 < dest_size) { memcpy(dest + dest_idx, "&lt;", 4); dest_idx += 4; } break;
-            case '>': if (dest_idx + 4 < dest_size) { memcpy(dest + dest_idx, "&gt;", 4); dest_idx += 4; } break;
-            case '"': if (dest_idx + 6 < dest_size) { memcpy(dest + dest_idx, "&quot;", 6); dest_idx += 6; } break;
-            case '\'': if (dest_idx + 5 < dest_size) { memcpy(dest + dest_idx, "&#39;", 5); dest_idx += 5; } break;
-            default: dest[dest_idx++] = src[i]; break;
-        }
-    }
-    dest[dest_idx] = '\0';
+    snprintf(query, sizeof(query), "SELECT * FROM users WHERE name = '%s'", username);
 }
 
 void helper_render_block(char *user_input) {
-    if (user_input == NULL) {
-        printf("<div></div>\n");
-        return;
-    }
-    char escaped_input[2048]; // Generously sized for HTML escaping
-    escape_html_string(escaped_input, sizeof(escaped_input), user_input);
-    printf("<div>%s</div>\n", escaped_input);
+    printf("<div>%s</div>\n", user_input);
 }
 
 void helper_parse_number(char *input) {
-    if (input == NULL || *input == '\0') {
-        printf("Number: Invalid input (empty/null)\n");
-        return;
-    }
-    char *endptr;
-    errno = 0; // Clear errno before call
-    long num_long = strtol(input, &endptr, 10);
-
-    if (endptr == input) {
-        printf("Number: Invalid input (no digits)\n");
-    } else if (*endptr != '\0' && !isspace((unsigned char)*endptr)) {
-        printf("Number: Invalid input (trailing characters) - partially parsed: %ld\n", num_long);
-    } else if ((num_long == LONG_MIN || num_long == LONG_MAX) && errno == ERANGE) {
-        printf("Number: Out of range for long (%ld)\n", num_long);
-    } else if (num_long > INT_MAX || num_long < INT_MIN) {
-        printf("Number: Out of range for int (%ld)\n", num_long);
-    } else {
-        int num = (int)num_long;
-        printf("Number: %d\n", num);
-    }
+    int num = atoi(input);
+    printf("Number: %d\n", num);
 }
 
 void helper_reserve_buffer() {
     char *leak = malloc(1024);
-    if (leak == NULL) {
-        fprintf(stderr, "Memory allocation failed in helper_reserve_buffer.\n");
-        return;
-    }
-    // Do something with leak if intended
-    free(leak); // Clean up allocated memory
 }
 
 void helper_copy_index(char *array, int index) {
     char buffer[100];
-    if (array == NULL) {
-        fprintf(stderr, "Error: array is NULL in helper_copy_index.\n");
-        return;
-    }
-    // Check bounds for 'buffer' write and assume 'array' is safe to read from 'index'
-    if (index >= 0 && index < sizeof(buffer)) {
-        buffer[index] = array[index]; // Potentially unsafe read if 'array' is smaller than 'index'
-        printf("Copied buffer[%d] = '%c'\n", index, buffer[index]);
-    } else {
-        fprintf(stderr, "Error: Index %d out of bounds for buffer (size %zu).\n", index, sizeof(buffer));
-    }
+    buffer[index] = array[index];
 }
 
 void helper_set_index(char *array, int index, char value) {
-    if (array == NULL) {
-        fprintf(stderr, "Error: array is NULL in helper_set_index.\n");
-        return;
-    }
-    // Assume a maximum safe size for 'array' for this example
-    const int MAX_ARRAY_SIZE = 256;
-    if (index >= 0 && index < MAX_ARRAY_SIZE) {
-        array[index] = value;
-        printf("Set array[%d] = '%c'\n", index, value);
-    } else {
-        fprintf(stderr, "Error: Index %d out of bounds for array (max size %d).\n", index, MAX_ARRAY_SIZE);
-    }
+    array[index] = value;
 }
 
 void helper_handle_file() {
     FILE *fp = fopen("test.txt", "r");
     if (fp) {
-        printf("File 'test.txt' opened.\n");
-        fclose(fp); // Close the file
-    } else {
-        fprintf(stderr, "Error opening file 'test.txt': %s\n", strerror(errno));
     }
 }
 
 int main(int argc, char *argv[]) {
-    srand(time(NULL)); // Seed the random number generator once
-
     if (argc > 1) {
         helper_copy_text(argv[1]);
         helper_log_message(argv[1]);
         helper_show_file(argv[1]);
     }
-
-    // Example calls for other helpers
-    helper_allocate_block(10, 20);
-    helper_reuse_buffer();
-    char *data_to_free = malloc(10);
-    if (data_to_free) {
-        helper_cleanup_twice(data_to_free); // This will only free once
-        // To properly test double free, need to re-allocate or ensure it's not freed.
-        // For the fix, just showing it's freed once.
-    }
-    // helper_read_line(); // Uncomment to test gets replacement
-    helper_format_buffer("Test string for formatting");
-    helper_open_upload("safe_file.txt");
-    helper_open_upload("../../etc/passwd"); // Example of malicious input
-    helper_check_then_open("test_check.txt");
-    helper_print_length("Hello World");
-    helper_print_length(NULL);
-    helper_show_value();
-    printf("Random value: %d\n", helper_simple_random());
-    helper_default_login();
-    char obfuscate_data[] = "Secret";
-    helper_obfuscate(obfuscate_data);
-    printf("Obfuscated: %s\n", obfuscate_data);
-    helper_build_query("john.doe");
-    helper_build_query("admin' OR '1'='1"); // SQL injection attempt
-    helper_render_block("<h1>Hello & World</h1><script>alert('XSS')</script>"); // XSS attempt
-    helper_parse_number("123");
-    helper_parse_number("abc");
-    helper_parse_number("99999999999999999999999999999999999999999"); // Long number
-    helper_reserve_buffer();
-    char test_array[200] = "abcdefghijklmnopqrstuvwxyz";
-    helper_copy_index(test_array, 5);
-    helper_copy_index(test_array, 150); // Out of bounds for buffer
-    helper_set_index(test_array, 10, 'X');
-    helper_set_index(test_array, 300, 'Y'); // Out of bounds for assumed array size
-    helper_handle_file();
-
     return 0;
 }
-```
