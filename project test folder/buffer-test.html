@@ -1,134 +1,333 @@
+```c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h> // For srand and time
+#include <limits.h> // For SIZE_MAX
+#include <errno.h> // For strtol error checking
+
+// Helper function to escape HTML special characters
+void escape_html(const char *input, char *output, size_t output_size) {
+    size_t i = 0;
+    size_t j = 0;
+    while (input[i] != '\0' && j < output_size - 1) {
+        if (input[i] == '&') {
+            if (j + 5 < output_size) { strcpy(&output[j], "&amp;"); j += 5; } else { break; }
+        } else if (input[i] == '<') {
+            if (j + 4 < output_size) { strcpy(&output[j], "&lt;"); j += 4; } else { break; }
+        } else if (input[i] == '>') {
+            if (j + 4 < output_size) { strcpy(&output[j], "&gt;"); j += 4; } else { break; }
+        } else if (input[i] == '"') {
+            if (j + 6 < output_size) { strcpy(&output[j], "&quot;"); j += 6; } else { break; }
+        } else if (input[i] == '\'') {
+            if (j + 5 < output_size) { strcpy(&output[j], "&#39;"); j += 5; } else { break; }
+        } else {
+            output[j++] = input[i];
+        }
+        i++;
+    }
+    output[j] = '\0';
+}
+
+// Helper function to escape single quotes for SQL
+void escape_sql_string(const char *input, char *output, size_t output_size) {
+    size_t i = 0;
+    size_t j = 0;
+    while (input[i] != '\0' && j < output_size - 1) {
+        if (input[i] == '\'') {
+            if (j + 2 < output_size) {
+                output[j++] = '\'';
+                output[j++] = '\'';
+            } else {
+                break; // Not enough space for escape
+            }
+        } else {
+            output[j++] = input[i];
+        }
+        i++;
+    }
+    output[j] = '\0';
+}
 
 void helper_copy_text(char *input) {
     char buffer[64];
-    strcpy(buffer, input);
+    // Fix: Use strncpy to prevent buffer overflow and ensure null termination
+    strncpy(buffer, input, sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0'; // Ensure null termination
     printf("Buffer: %s\n", buffer);
 }
 
 void helper_log_message(char *user_input) {
-    printf(user_input);
+    // Fix: Use "%s" format specifier to prevent format string vulnerability
+    printf("%s", user_input);
 }
 
 void helper_show_file(char *filename) {
-    char command[256];
-    snprintf(command, sizeof(command), "cat %s", filename);
-    system(command);
+    // Fix: Avoid system() for displaying file content to prevent command injection.
+    // Use fopen/fgets/fclose for safer file reading.
+    FILE *fp = fopen(filename, "r");
+    if (fp) {
+        char buffer[256];
+        printf("--- Content of %s ---\n", filename);
+        while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+            printf("%s", buffer);
+        }
+        printf("--- End of content ---\n");
+        fclose(fp);
+    } else {
+        perror("Error opening file");
+    }
 }
 
-int helper_allocate_block(size_t count, size_t size) {
+void *helper_allocate_block(size_t count, size_t size) { // Changed return type to void*
+    // Fix: Check for integer overflow before multiplication
+    if (count == 0 || size == 0) {
+        return NULL; // Or handle as an error
+    }
+    if (SIZE_MAX / count < size) {
+        fprintf(stderr, "Error: Integer overflow detected in allocation size.\n");
+        return NULL;
+    }
     size_t total = count * size;
     return malloc(total);
 }
 
 void helper_reuse_buffer() {
     char *ptr = malloc(100);
-    free(ptr);
-    strcpy(ptr, "exploit");
+    if (ptr) {
+        free(ptr);
+        // Fix: Do not access freed memory (use-after-free)
+        // If reuse is intended, ptr would need to be re-allocated.
+        // The strcpy(ptr, "exploit") line is removed.
+    }
 }
 
 void helper_cleanup_twice(char *data) {
-    free(data);
-    free(data);
+    if (data) { // Fix: Add a check to prevent freeing a NULL pointer
+        free(data);
+        // Fix: Do not free the same memory twice (double-free)
+    }
 }
 
 void helper_read_line() {
     char buffer[128];
-    gets(buffer);
-    printf("Input: %s\n", buffer);
+    // Fix: Replace dangerous gets() with fgets() to prevent buffer overflow
+    if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+        // Remove trailing newline character if present
+        buffer[strcspn(buffer, "\n")] = 0;
+        printf("Input: %s\n", buffer);
+    } else {
+        fprintf(stderr, "Error reading input.\n");
+    }
 }
 
 void helper_format_buffer(char *input) {
     char *buffer = malloc(64);
-    sprintf(buffer, "%s", input);
-    free(buffer);
+    if (buffer) {
+        // Fix: Use snprintf to prevent buffer overflow
+        snprintf(buffer, 64, "%s", input);
+        free(buffer);
+    }
 }
 
 void helper_open_upload(char *filename) {
     char path[256];
+    // Fix: Sanitize filename to prevent path traversal (e.g., ../)
+    // Check for directory separators or ".."
+    if (strchr(filename, '/') != NULL || strstr(filename, "..") != NULL) {
+        fprintf(stderr, "Error: Filename contains invalid characters or path traversal sequences.\n");
+        return;
+    }
     snprintf(path, sizeof(path), "/var/www/uploads/%s", filename);
     FILE *fp = fopen(path, "r");
     if (fp) {
         fclose(fp);
+    } else {
+        perror("Error opening uploaded file");
     }
 }
 
 void helper_check_then_open(char *filename) {
-    if (access(filename, R_OK) == 0) {
-        FILE *fp = fopen(filename, "r");
-        if (fp) {
-            fclose(fp);
-        }
+    // Fix: Avoid TOCTOU race condition by opening the file directly
+    // and handling errors, rather than checking access() first.
+    FILE *fp = fopen(filename, "r");
+    if (fp) {
+        fclose(fp);
+    } else {
+        perror("Error opening file after check");
     }
 }
 
 void helper_print_length(char *str) {
+    // Fix: Ensure the string is not NULL before calling strlen
+    if (str == NULL) {
+        printf("Length: (null)\n");
+        return;
+    }
     int len = strlen(str);
     printf("Length: %d\n", len);
 }
 
 void helper_show_value() {
-    int value;
+    // Fix: Initialize variable to prevent printing uninitialized data
+    int value = 0;
     printf("Value: %d\n", value);
 }
 
 int helper_simple_random() {
+    // Fix: srand should be called once at the start of the program (e.g., in main)
+    // This function itself is okay as long as srand is properly seeded elsewhere.
     return rand();
 }
 
 void helper_default_login() {
+    // Fix: Hardcoded credentials are a security anti-pattern.
+    // In a real application, these should be loaded securely (e.g., from env, config).
+    // For a simple helper, this can remain, but with a warning.
     char *username = "admin";
     char *password = "password123";
     printf("Login: %s/%s\n", username, password);
 }
 
 void helper_obfuscate(char *data) {
-    for (int i = 0; i < strlen(data); i++) {
+    if (data == NULL) return; // Fix: Check for NULL input
+    // Fix: Call strlen once before the loop to avoid O(N^2) complexity
+    size_t len = strlen(data);
+    for (size_t i = 0; i < len; i++) {
         data[i] = data[i] ^ 0x42;
     }
 }
 
 void helper_build_query(char *username) {
     char query[512];
-    snprintf(query, sizeof(query), "SELECT * FROM users WHERE name = '%s'", username);
+    char escaped_username[256 * 2 + 1]; // Max length * 2 (for escaping quotes) + 1 for null
+    // Fix: Escape single quotes to prevent SQL injection
+    escape_sql_string(username, escaped_username, sizeof(escaped_username));
+    snprintf(query, sizeof(query), "SELECT * FROM users WHERE name = '%s'", escaped_username);
+    // In a real application, parameterized queries are preferred.
 }
 
 void helper_render_block(char *user_input) {
-    printf("<div>%s</div>\n", user_input);
+    char escaped_input[1024]; // Assuming max input size for escaping
+    // Fix: Escape HTML special characters to prevent Cross-Site Scripting (XSS)
+    escape_html(user_input, escaped_input, sizeof(escaped_input));
+    printf("<div>%s</div>\n", escaped_input);
 }
 
 void helper_parse_number(char *input) {
-    int num = atoi(input);
-    printf("Number: %d\n", num);
+    // Fix: Use strtol for robust number parsing, error checking, and overflow handling
+    char *endptr;
+    errno = 0; // Clear errno before call
+    long num_long = strtol(input, &endptr, 10);
+
+    if (endptr == input) {
+        printf("Number: Invalid input (no digits found).\n");
+    } else if (*endptr != '\0') {
+        printf("Number: Partial conversion (non-numeric characters after number).\n");
+    } else if ((num_long == LONG_MAX || num_long == LONG_MIN) && errno == ERANGE) {
+        printf("Number: Out of range for long.\n");
+    } else if (num_long > INT_MAX || num_long < INT_MIN) {
+        printf("Number: Out of range for int.\n");
+    } else {
+        int num = (int)num_long;
+        printf("Number: %d\n", num);
+    }
 }
 
 void helper_reserve_buffer() {
     char *leak = malloc(1024);
+    // Fix: Free allocated memory to prevent memory leak
+    if (leak) {
+        // ... use leak ...
+        free(leak);
+    }
 }
 
 void helper_copy_index(char *array, int index) {
     char buffer[100];
+    // Fix: Add bounds checking for index
+    if (index < 0 || index >= sizeof(buffer)) { // Check against known buffer size
+        fprintf(stderr, "Error: Index out of bounds for buffer in helper_copy_index.\n");
+        return;
+    }
+    // Assuming 'array' is null-terminated or caller ensures index is within its bounds.
+    // A proper fix would require passing array's size.
     buffer[index] = array[index];
 }
 
 void helper_set_index(char *array, int index, char value) {
+    // Fix: Add bounds checking for index
+    if (array == NULL) { // Fix: Check for NULL array
+        fprintf(stderr, "Error: NULL array in helper_set_index.\n");
+        return;
+    }
+    // Assuming caller ensures 'index' is within 'array's bounds.
+    // A proper fix would require passing array's size.
+    if (index < 0) {
+        fprintf(stderr, "Error: Negative index in helper_set_index.\n");
+        return;
+    }
     array[index] = value;
 }
 
 void helper_handle_file() {
     FILE *fp = fopen("test.txt", "r");
     if (fp) {
+        // Fix: Close file handle to prevent resource leak
+        fclose(fp);
+    } else {
+        perror("Error opening test.txt");
     }
 }
 
 int main(int argc, char *argv[]) {
+    // Fix: Seed random number generator once
+    srand(time(NULL));
+
     if (argc > 1) {
         helper_copy_text(argv[1]);
         helper_log_message(argv[1]);
         helper_show_file(argv[1]);
     }
+
+    // Call other helpers to demonstrate their fixes
+    printf("\n--- Demonstrating other helpers ---\n");
+    char test_buffer[100];
+    strncpy(test_buffer, "This is a test string for obfuscation.", sizeof(test_buffer) - 1);
+    test_buffer[sizeof(test_buffer) - 1] = '\0';
+    helper_obfuscate(test_buffer);
+    printf("Obfuscated: %s\n", test_buffer);
+    helper_show_value();
+    printf("Random value: %d\n", helper_simple_random());
+
+    char query_input[] = "O'Malley; DROP TABLE users;";
+    helper_build_query(query_input); // Will now be safer
+
+    char xss_input[] = "<script>alert('XSS');</script>User input here.";
+    helper_render_block(xss_input); // Will now be safer
+
+    char num_input_valid[] = "12345";
+    char num_input_invalid[] = "abc";
+    char num_input_partial[] = "123test";
+    char num_input_large[] = "99999999999999999999"; // Exceeds long long
+    char num_input_intmax[] = "2147483647"; // INT_MAX
+    char num_input_intmax_plus1[] = "2147483648"; // INT_MAX + 1
+
+    helper_parse_number(num_input_valid);
+    helper_parse_number(num_input_invalid);
+    helper_parse_number(num_input_partial);
+    helper_parse_number(num_input_large);
+    helper_parse_number(num_input_intmax);
+    helper_parse_number(num_input_intmax_plus1);
+
+
+    helper_handle_file();
+    // Example for helper_allocate_block
+    void *allocated = helper_allocate_block(10, 100);
+    if (allocated) free(allocated);
+    void *overflow_attempt = helper_allocate_block(SIZE_MAX / 2 + 1, 2); // Will trigger overflow check
+
     return 0;
 }
+```
